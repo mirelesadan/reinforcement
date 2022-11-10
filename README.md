@@ -1,5 +1,5 @@
 # Reinforcement: Inverting a Double-Pendulum In a Cart (DPIC)
-Repository cretaed by Adan J. Mireles (Fall 2022) for the Data-Enabled Physics Course at Rice University.
+Repository created by Adan J. Mireles (Fall 2022) for the Data-Enabled Physics Course at Rice University.
 
 
 - Derive equations of motion for a Double-Pendulum In a Cart (DPIC).
@@ -15,9 +15,9 @@ Repository cretaed by Adan J. Mireles (Fall 2022) for the Data-Enabled Physics C
 - Install pytorch (https://pytorch.org/get-started/locally/) 
 
 - Install stable-baselines3 (https://stable-baselines3.readthedocs.io/en/master/guide/install.html)
-  - Using pip:  ``` pip install stable-baselines3[extra] ```: the "```[extra]```" option automatically adds TensorBoard, 
+  - Using pip:  ``` pip install stable-baselines3[extra] ```: the "```[extra]```" option automatically adds TensorBoard, ```pyAtari```, and OpenCV.
 
-- It is extremely recommended also download TensorBoard (https://pypi.org/project/tensorboard/), as it enables to track and visualize agent learning metrics  
+- It is extremely recommended download TensorBoard as well (https://pypi.org/project/tensorboard/), as it enables to track and visualize agent learning metrics.  
   - Using pip:  ``` pip install tensorboard ```
   - When training an agent, run the following in a command line: ```tensorboard --logdir ./[name_of_directory_with_log_folder]/```. 
 
