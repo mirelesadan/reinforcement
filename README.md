@@ -1,4 +1,4 @@
-# Reinforcement: Training an Agent to Invert a Double-Pendulun In a Cart
+# Reinforcement: Inverting a Double-Pendulum In a Cart (DPIC)
 Repository cretaed by Adan J. Mireles (Fall 2022) for the Data-Enabled Physics Course at Rice University.
 
 
