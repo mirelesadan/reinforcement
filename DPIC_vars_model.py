@@ -1,5 +1,5 @@
-# Double Pendulum in Cart 
-# Approximations and Animation 
+# Automatic equation derivations
+# Results stored in variables to later importe into custom environment
 
 # by Adan J. Mireles Fall 2022
 
@@ -82,7 +82,6 @@ sol_the1dd = (G*a*l - G*d*i - a*h*k - c*e*l + c*h*i + d*e*k)/(-G*a*j + G*b*i + a
 sol_the2dd = (-a*f*l + a*h*j + b*e*l - b*h*i - d*e*j + d*f*i)/(-G*a*j + G*b*i + a*f*k - b*e*k + c*e*j - c*f*i)
 
 # Here, note that lambdify converts symbolic expressions into numerical functions.
-
 dz0dt_f = smp.lambdify((t,u,g,m0,m1,m2,L1,L2,the0,the1,the2,the0_d,the1_d,the2_d), sol_the0dd)
 dz1dt_f = smp.lambdify((t,u,g,m0,m1,m2,L1,L2,the0,the1,the2,the0_d,the1_d,the2_d), sol_the1dd)
 dz2dt_f = smp.lambdify((t,u,g,m0,m1,m2,L1,L2,the0,the1,the2,the0_d,the1_d,the2_d), sol_the2dd)

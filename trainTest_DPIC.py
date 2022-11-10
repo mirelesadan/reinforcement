@@ -1,3 +1,7 @@
+# Create directories for models and logging files
+# Specify the algorithm and number of timesteps before saving trained agent
+# Load custom environment and train agent using specified algorithm
+
 from stable_baselines3 import PPO
 import os
 from CustomEnvironment_DPIC import DPICenv

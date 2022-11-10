@@ -9,15 +9,11 @@
 # Packages required by DPIC simulation/data generation
 import numpy as np
 from scipy.integrate import odeint
-from collections import deque
 
 # RL packages
 import gym
 from gym import spaces
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
-from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.utils import set_random_seed
+
 
 # DPIC equations of motion
 from DPIC_vars_model import (dz0dt_f, dz1dt_f, dz2dt_f, 
@@ -33,8 +29,8 @@ L1 = 0.8          # m        Length of rod 1
 L2 = 0.8          # m        Length of rod 2
 # Action Parameters
 t_action = 0.006   # sec     Duration of constant action
-num_calcs = 6      # per timestep
-t = np.linspace(0, t_action, num_calcs)    # Previosuly 0.03 , 6
+num_calcs = 4      # per timestep
+t = np.linspace(0, t_action, num_calcs)    # Previosuly 0, 0.03 , 6
 # Success/Fail Parameters
 t_out = 10       # sec   Timeout
 hold  = 0.6      # sec   Time after which agent starts getting a higher reward if inverted
@@ -81,11 +77,11 @@ def invert_check(time_held, hold_time_goal, pen1_angle, pen2_angle):
     ycoord_pen2 = L1*np.cos(pen1_angle) + L2*np.cos(pen2_angle)          
     if ycoord_pen2 >= (L1 + L2) * stretch:
         if time_held >= hold_time_goal: # Agent successfully inverts DPIC for goal time
-            return 2   # if invert_check == 2: add t_action to time_held       
-        else:          # Agent inverts DPIC but not for goal time yet
-            return 1   # if invert_check == 1: add t_action to time_held
-    else:              # Agent has not inverted DPIC
-        return 0       # if invert_check == 0: time_held = 0
+            return 2                    # if invert_check == 2: add t_action to time_held       
+        else:                           # Agent inverts DPIC but not for goal time yet
+            return 1                    # if invert_check == 1: add t_action to time_held
+    else:                               # Agent has not inverted DPIC
+        return 0                        # if invert_check == 0: time_held = 0
      
 # Condition (2): Determine whether cart is within or out of bounds
 def out_of_bounds(cart_pos, bound):                                                                         
@@ -138,7 +134,7 @@ class DPICenv(gym.Env):
         self.t = t  
         
         # DIPC System Bounds/Limits/Restrictions
-        self.u_high = 15 * self.m0 * self.g   # N        Maximum control force
+        self.u_high = 25 * self.m0 * self.g   # N        Maximum control force
         self.xmax_bd = self.maxL              # m        Right bound of horizontal movement
         self.spd_bd = 5 * self.xmax_bd        # m/sec    Maximum cart speed
         self.the1_bd = np.pi                  # rad      Bounds for angles on [-pi, pi]
@@ -213,8 +209,8 @@ class DPICenv(gym.Env):
         #                + self.time_elapsed*500.
         #                )
         
-        self.reward = (amp * (np.cos(np.pi * th0 / self.xmax_bd) - shift)/10
-                        - dth0**2/100
+        self.reward = (amp * (np.cos(np.pi * th0 / self.xmax_bd) - shift)/100
+                        - dth0**2/1000
                         - (th1**2  + th2**2)*10
                         - (dth1**2 + dth2**2)*10
                         - u_action**2/2000
@@ -237,10 +233,10 @@ class DPICenv(gym.Env):
                                                                        self.the2_bd, self.angVel_bd], dtype=np.float32)
         
         if self.done:
-            self.reward = self.reward - 150.
+            self.reward = self.reward - 350.
             
         if self.inv:
-            self.reward = self.reward + 300.
+            self.reward = self.reward + 700.
         
         info = {}
     
