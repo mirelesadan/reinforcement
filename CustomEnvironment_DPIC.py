@@ -1,10 +1,14 @@
-#Packages required by DPIC simulation
+# =============================================================================
+# Double Pendulum in Cart (DPIC)
+# ~ Custom Environment ~
+# by Adan J. Mireles Fall 2022
+# =============================================================================
+
+# IMPORT NECESSARY PACKAGES
+
+# Packages required by DPIC simulation/data generation
 import numpy as np
-import sympy as smp
-from sympy.solvers.solveset import linsolve
 from scipy.integrate import odeint
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from collections import deque
 
 # RL packages
@@ -15,42 +19,31 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.utils import set_random_seed
 
-# Importing DPIC equations of motion
+# DPIC equations of motion
 from DPIC_vars_model import (dz0dt_f, dz1dt_f, dz2dt_f, 
                              dthe0dt_f, dthe1dt_f, dthe2dt_f)
 
-# Other packages
-import cv2
-
-# In[]: Environment Parameters
-
-# Ultimate goal is to hold pendulum at inverted position for some time:
-hold_time_goal = 0.8    #sec
-max_stretch_tol = 0.98  #98% of pendulum's maximum (vertical) stretch  
-                        #qualifies as an inverted pendulum
-
-###################
-# Time Parameters #
-###################
-
-# Max time to fail (timeout)
-t_out = 10 # sec
-
-# Duration of constant action:
-t_action = 0.05 # sec
-
-# Number of calculations 
-num_calcs = 6 
-
-# Times for which the solver will compute the state of the DPIC
-t = np.linspace(0, t_action, num_calcs)  # num_calcs/t_action = 80 calculations per second
+# DEFAULT PARAMETERS:
+# Physical parameters
+g = 9.81          # m/sec^2  Gravitational acceleration
+m0 = 2.1          # kg       Mass of cart
+m1= 0.7           # kg       Mass of pendulum 1
+m2= 0.7           # kg       Mass of pendulum 2
+L1 = 0.8          # m        Length of rod 1
+L2 = 0.8          # m        Length of rod 2
+# Action Parameters
+t_action = 0.006   # sec     Duration of constant action
+num_calcs = 6      # per timestep
+t = np.linspace(0, t_action, num_calcs)    # Previosuly 0.03 , 6
+# Success/Fail Parameters
+t_out = 10       # sec   Timeout
+hold  = 0.6      # sec   Time after which agent starts getting a higher reward if inverted
+stretch = 0.995  # % of pendulum's vertical stretch 
 
 
-# In[]: 
-
+# HELPER FUNCTIONS:
+# Return the rate of change of each component of the S vector
 # Within this definition, "S" is the vector containing the state of the DPIC
-# "dSdt" returns the rate of change of each component of the S vector
-
 def dSdt(S, t, u, g, m0, m1, m2, L1, L2):
     the0, z0, the1, z1, the2, z2 = S
     return [
@@ -62,203 +55,231 @@ def dSdt(S, t, u, g, m0, m1, m2, L1, L2):
         dz2dt_f(t, u, g, m0, m1, m2, L1, L2, the0, the1, the2, z0, z1, z2),
     ]
 
+# Compute state of DPIC at times specified in "t" (See Action Parameters above)
 def odeSol(S,u):
     the0, z0, the1, z1, the2, z2 = S
     sol = odeint(dSdt, y0=S, t=t, args=(u, g, m0, m1, m2, L1, L2))
     return sol
 
-# u=2
-# solAA = odeSol([0,0,np.pi/2,0,np.pi/2,0])
-# solAA[5]
+# Extract position of each component on system
+# Input: (time, cartPos, AnglePen1, AnglePen1, LengthPen1, LengthPen2)
+def xy_coords(time, the0, the1, the2, L1, L2):
+    return (the0,                                      # Cart x-position
+            0*the0,                                    # Cart y-position
+            the0 + L1*np.sin(the1),                    # Pendulum 1 x-position
+            L1*np.cos(the1),                           # Pendulum 1 y-position
+            the0 + L1*np.sin(the1) + L2*np.sin(the2),  # Pendulum 2 x-position
+            L1*np.cos(the1) + L2*np.cos(the2))         # Pendulum 2 y-position
 
-# In[]: 
+# Normalize pendulum angle x between [-pi, pi]
+def angle_normalize(x):
+    return ((x + np.pi) % (2 * np.pi)) - np.pi
 
-# Defining what would cause DPIC to succeed.
-# DPIC is rewarded if the second pendulum is held in inverted position 
-# for a defined time.
-
-# Here, theta1 and theta2 are angles of DPs at current state
-def invert_check(time_held,theta1,theta2):
-       # y-coordinate of second end of DPIC    >= some fraction of max stretch 
-    if (L1*np.cos(theta1) + L2*np.cos(theta2)) >= max_stretch_tol*maxL:
-        time_held += t_action
-        if time_held >= hold_time_goal:
-            return 2   # Agent successfully inverts DPIC for goal time
-                       # if invert_check == 2: add t_action to time_held and give high reward
-        else:
-            return 1   # Agent inverts DPIC but not for goal time yet
-                       # if invert_check == 1: add t_action to time_held and give reward
-    else:
-        return 0       # Agent has not inverted DPIC
-                       # if invert_check == 0: time_held = 0 and punish
-
-# Defining what would cause DPIC to fail (x-axis limits):
-# Here, theta0 is position of cart on current state
-def out_of_bounds(theta0):
-    if theta0 >= max_bd or theta0 <= min_bd:
-        return 1
+# Agent Failre/Success Conditions:
+# Condition (1): DP inversion
+def invert_check(time_held, hold_time_goal, pen1_angle, pen2_angle):
+    ycoord_pen2 = L1*np.cos(pen1_angle) + L2*np.cos(pen2_angle)          
+    if ycoord_pen2 >= (L1 + L2) * stretch:
+        if time_held >= hold_time_goal: # Agent successfully inverts DPIC for goal time
+            return 2   # if invert_check == 2: add t_action to time_held       
+        else:          # Agent inverts DPIC but not for goal time yet
+            return 1   # if invert_check == 1: add t_action to time_held
+    else:              # Agent has not inverted DPIC
+        return 0       # if invert_check == 0: time_held = 0
+     
+# Condition (2): Determine whether cart is within or out of bounds
+def out_of_bounds(cart_pos, bound):                                                                         
+    if cart_pos >= bound or cart_pos <= -bound:
+        return 1  # Agent is out of bounds
     else: 
-        return 0
+        return 0  # Agent is within bounds
 
-# Defining what would cause DPIC to fail (time limit):
+# Condition (3): Determine whether cart is moving too fast
+def speed_Lim(cart_speed, limit):
+    if cart_speed >= limit:
+        return 1  # Cart is moving too fast
+    else: 
+        return 0  # Cart speed is okay    
+
+# Condition (4): Determine whether cart is moving too fast
+def angVel_Lim(angVel1, angVel2, limit):
+    if angVel1 >= limit or angVel2 >= limit:
+        return 1  # Cart is moving too fast
+    else: 
+        return 0  # Swing rate is a 
+
+# Condition (5): Verify if agent has exhausted its time
 def timeout(time_elapsed):
-    if time_elapsed >= t_out:      # Defined within Environment Parameters
-        return 1
+    if time_elapsed >= t_out:
+        return 1  # Agent unable to invert pendulum within allowed time
     else:
-        return 0
-    
-# In[]: Initial Conditions
-
-# Physical Parameters
-g = 9.81        #m/sec^2   Gravitational acceleration
-m0 = 2.1        #kg        Mass of cart
-m1= 0.7         #kg        Mass of pendulum 1
-m2= 0.7         #kg        Mass of pendulum 2
-L1 = 0.8        #m         Length of rod 1
-L2 = 0.8        #m         Length of rod 2
-maxL = L1 + L2  #m         Maximum stretch
-
-# Control Force Limits
-max_u = m0*g    #N     Maximum control force
-min_u = -max_u  #N     Minimum control force
-
-# Initial angle displacement
-theta_small = np.pi/50
-
-# Bound Limits
-max_bd = 1.5*maxL    #m
-min_bd = -max_bd   #m
-
-# Angle limits
-the1_lim = 10*np.pi
-the2_lim = 25*np.pi
-
-# In[]: Defining the Environment
+        return 0  # Agent still trying to invert pendulum within allowed time
 
 class DPICenv(gym.Env):
 
-    def __init__(self):
-        super(DPICenv, self).__init__()
+    def __init__(self):     
+        # Some Physical Parameters, defined 
+        self.g = g                     # m/sec^2  Gravitational acceleration
+        self.m0 = m0                   # kg       Mass of cart
+        self.m1= m1                    # kg       Mass of pendulum 1
+        self.m2= m2                    # kg       Mass of pendulum 2
+        self.L1 = L1                   # m        Length of rod 1
+        self.L2 = L2                   # m        Length of rod 2
+        self.maxL = self.L1 + self.L2  # m        Maximum DP stretch
         
-        # The action space is only to include a non-discrete value in
-        # a normalized range [-1, 1]. Actual range is [min_u,max_u]...
+        # Time Parameters 
+        self.t_out = t_out              # sec         Max time to fail (timeout)
+        self.t_action = t_action        # sec         Duration of constant action
+        self.num_calcs = num_calcs      # per timestep
+        self.hold_time_goal = hold      # sec         Time for which agent must hold pendulum at inverted position)
+        self.max_stretch_tol = stretch  # 99.9% of pendulum's vertical stretch 
+
+        # Times for which the solver will compute the state of the DPIC
+        self.t = t  
         
-        self.u_high = 2*max_u
-                
-        self.action_space = spaces.Box(low=-self.u_high, high=self.u_high, 
+        # DIPC System Bounds/Limits/Restrictions
+        self.u_high = 15 * self.m0 * self.g   # N        Maximum control force
+        self.xmax_bd = self.maxL              # m        Right bound of horizontal movement
+        self.spd_bd = 5 * self.xmax_bd        # m/sec    Maximum cart speed
+        self.the1_bd = np.pi                  # rad      Bounds for angles on [-pi, pi]
+        self.the2_bd = np.pi                  # rad      Bounds for angles on [-pi, pi]
+        self.angVel_bd = (2*np.pi) * 10       # rad/sec  Also (2*pi) * N rev/s
+        
+        # ACTION SPACE:
+        # The action space only includes a non-discrete value in
+        # a normalized range [-1, 1]. Actual range is [-u_high,u_high].
+        self.action_space = spaces.Box(low=-1, high=1, 
                                        shape=(1,), dtype=np.float32)
         
-        # Observations to include (total 6):
-        # (*) Position of cart (1 value)
-        # (*) Speed of cart (1 value)
-        # (*) Position of each pendulum (2 values)
-        # (*) Angular speed of each pendulum (2 values)
-        
-        self.x_bound = 2*max_bd
-        self.the1_bd = 2*the1_lim
-        self.the2_bd = 2*the2_lim
-        
-        high = np.array(
-            [self.x_bound,               # Horizontal movement bounds
-             np.finfo(np.float32).max,   # Value simulating infinity
-             self.the1_bd,               # 
-             np.finfo(np.float32).max,   # Value simulating infinity
-             self.the2_bd,               # 
-             np.finfo(np.float32).max,   # Value simulating infinity
-            ],
-            dtype=np.float32
-        )
-        
-        self.observation_space = spaces.Box(-high, high, 
-                                            dtype=np.float32)
+        # OBSERVATION SPACE:   
+        # Six observations normalized within [-1,1]
+        self.observation_space = spaces.Box(low=-1, high=1,
+                                            shape=(6,), dtype=np.float32)
 
-    def step(self, action): 
-        assert self.action_space.contains(
-        action), f"{action!r} ({type(action)}) invalid"
-		
-        # self.prev_actions.append(action)
-        
-        self.u = action*max_u  # Undo normalization
-        
+    def step(self, u): 	
+       
+        # Current state (normalized between [-1,1]):
+        th0, dth0, th1, dth1, th2, dth2 = self.state
+
+        # Undo normalization to input state into ODE solver
+        u_action = self.u_high * u    # N
+        th0 = self.xmax_bd * th0      # m
+        dth0 = self.spd_bd * dth0     # m/sec
+        th1 = self.the1_bd * th1      # rad
+        dth1 = self.angVel_bd * dth1  # rad/sec
+        th2 = self.the2_bd * th2      # rad
+        dth2 = self.angVel_bd * dth2  # rad/sec
+                
+        # self.prev_actions.append(u)
+             
         # Calculate ODE solution 
-        self.sol = odeSol( [self.cart_pos, self.cart_speed, 
-                            self.pen1_ang, self.pen1_angVel, 
-                            self.pen2_ang, self.pen2_angVel],self.u)
-        self.S = self.sol[num_calcs - 1]
-        self.time_elapsed = self.time_elapsed + t_action
+        self.sol = odeSol( [th0, dth0, 
+                            th1, dth1, 
+                            th2, dth2], u_action)
         
-        ########
-        # Fail #
-        ########
+        # Next state:
+        self.state = self.sol[num_calcs - 1]
+        th0 = self.state[0]
+        dth0 = self.state[1]
+        th1 = angle_normalize(self.state[2])
+        dth1 = self.state[3]
+        th2 = angle_normalize(self.state[4])
+        dth2 = self.state[5]
         
-        # What to do if out of bounds
+              
+        # Check if pendulum is inverted:
+        if invert_check(self.time_held, self.hold_time_goal, th1, th2) == 2:
+            self.time_held = self.time_held + self.t_action
+            self.inv = True
+        elif invert_check(self.time_held, self.hold_time_goal, th1, th2) == 1:
+            self.time_held = self.time_held + self.t_action
+        elif invert_check(self.time_held, self.hold_time_goal, th1, th2) == 0:
+            self.time_held = 0
+            
         
-        if out_of_bounds(self.cart_pos) == 1 or timeout(self.time_elapsed) == 1:
+        self.time_elapsed = self.time_elapsed + self.t_action
+        
+       
+        # Reward:
+        amp = 2.
+        shift = 0.85
+        # For starting inverted
+        # self.reward = (amp * (np.cos(np.pi * th0 / self.xmax_bd) - shift)/10
+        #                # - dth0**2/100
+        #                - (th1**2  + th2**2)/1.
+        #                - (dth1**2 + dth2**2)/1.
+        #                - u_action**2/4000
+        #                + (self.time_held*1.)*1000.
+        #                + self.time_elapsed*500.
+        #                )
+        
+        self.reward = (amp * (np.cos(np.pi * th0 / self.xmax_bd) - shift)/10
+                        - dth0**2/100
+                        - (th1**2  + th2**2)*10
+                        - (dth1**2 + dth2**2)*10
+                        - u_action**2/2000
+                        + (self.time_held*1.)*400.
+                        + self.time_elapsed*250.
+                        )
+                
+        if (out_of_bounds(th0, self.xmax_bd) == 1 
+            # or timeout(self.time_elapsed) == 1
+            or speed_Lim(dth0, self.spd_bd) == 1
+            or angVel_Lim(dth1, dth2, self.angVel_bd) == 1
+            or abs(th1) >= np.pi/2
+            or abs(th2) >= np.pi/2):
             self.done = True
             
-        ycoords = L1*np.cos(self.pen2_ang) + L2*np.cos(self.pen2_ang)
-        sum_vel = self.cart_speed + self.pen1_angVel + self.pen2_angVel
-                
-        self.total_reward = ycoords - sum_vel
-        self.reward = self.total_reward - self.prev_reward
-        self.prev_reward = self.total_reward
+        # Re-do normalization of state for observation: 
+        self.state = [th0, dth0, th1, dth1, th2, dth2]
+        self.state = np.array(self.state,dtype=np.float32) / np.array([self.xmax_bd, self.spd_bd,
+                                                                       self.the1_bd, self.angVel_bd,
+                                                                       self.the2_bd, self.angVel_bd], dtype=np.float32)
         
         if self.done:
-            self.reward = -10
+            self.reward = self.reward - 150.
+            
+        if self.inv:
+            self.reward = self.reward + 300.
+        
         info = {}
-        
-        cartPos = self.cart_pos/(2*max_bd)
-        cartSpeed = self.cart_speed/(4*max_bd)
-        pen1Ang = self.pen1_ang/(10*np.pi)
-        pen1AngVel = self.pen1_angVel/(200*np.pi)
-        pen2Ang = self.pen2_ang/(25*np.pi)
-        pen2AngVel = self.pen2_angVel/(500*np.pi)
-        
-        observation = [cartPos, cartSpeed, 
-                       pen1Ang, pen1AngVel, 
-                       pen2Ang, pen2AngVel]
-        observation = np.array(observation)
-        
-        return observation, self.reward, self.done, info
+    
+                     
+        return self._get_obs().astype(np.float32), float(self.reward), self.done, info
     
     
     def reset(self):
+              
         # Initializing DPIC conditions
         self.u = 0
         self.time_elapsed = 0
+        self.time_held = 0
+        
+        # Array of 4 random values between [-1, 1]
+        rand_vals = 2 * np.random.rand(4) - 1
         
         # Initial state of DPIC
         self.cart_pos = 0.
         self.cart_speed = 0.
-        self.pen1_ang = 0. + theta_small
+        self.pen1_ang = rand_vals[0]*.02
         self.pen1_angVel = 0.
-        self.pen2_ang = 0. + theta_small
+        self.pen2_ang = rand_vals[0]*.02
         self.pen2_angVel = 0.
         
         # Initial state in single list
-        self.S = [self.cart_pos, self.cart_speed, 
-                  self.pen1_ang, self.pen1_angVel, 
-                  self.pen2_ang, self.pen2_angVel]
+        self.state = np.array([self.cart_pos, self.cart_speed, 
+                               self.pen1_ang, self.pen1_angVel, 
+                               self.pen2_ang, self.pen2_angVel], dtype=np.float32)
         
-        self.prev_reward = 0
-        
+        self.prev_reward = 0.
         self.done = False
-             
-        # Create observation:
-        
-        # cartPos = self.cart_pos/(2*max_bd)
-        # cartSpeed = self.cart_speed/(4*max_bd)
-        # pen1Ang = self.pen1_ang/(10*np.pi)
-        # pen1AngVel = self.pen1_angVel/(200*np.pi)
-        # pen2Ang = self.pen2_ang/(25*np.pi)
-        # pen2AngVel = self.pen2_angVel/(500*np.pi)
-        
-        # cartPos = self.cart_pos
-        # cartSpeed = self.cart_speed
-        # pen1Ang = self.pen1_ang
-        # pen1AngVel = self.pen1_angVel
-        # pen2Ang = self.pen2_ang
-        # pen2AngVel = self.pen2_angVel
-        
-        observation = np.array(self.S,dtype=np.float32)
-        return observation  # reward, done, info can't be included
+        self.inv = False
+                
+        return self._get_obs()  # reward, done, info can't be included
+    
+    def _get_obs(self):
+        theta, thetadot, theta1, theta1dot, theta2, theta2dot = self.state
+        return np.array([theta, thetadot, 
+                         theta1, theta1dot, 
+                         theta2, theta2dot], 
+                         dtype=np.float32)
