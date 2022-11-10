@@ -20,3 +20,9 @@ Repository cretaed by Adan J. Mireles (Fall 2022) for the Data-Enabled Physics C
 - It is extremely recommended also download TensorBoard (https://pypi.org/project/tensorboard/), as it enables to track and visualize agent learning metrics  
   - Using pip:  ``` pip install tensorboard ```
   - When training an agent, run the following in a command line: ```tensorboard --logdir ./[name_of_directory_with_log_folder]/```. 
+
+## Other:
+
+- CUDA devices
+  - Check if your system has such available on https://developer.nvidia.com/cuda-zone
+  - If available, download the most recent CUDA toolkit from https://developer.nvidia.com/cuda-downloads
