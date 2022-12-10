@@ -1,5 +1,5 @@
 """
-[Main, executable .py file.] 
+[Main executable .py file.] 
 Upon running:
     (1) Directories for models and logs will be created in specified directory.
     (2) Reinforcement learning algorithm is loaded*
@@ -12,8 +12,10 @@ Upon running:
     
 * If different reinforcement learning algorithm is desired, replace all "DDPG"
   entries by deired algorithm (e.g., "PPO" and "A2C").
-** Pre-trained model can further be trained. See lines 98-100.
+** Pre-trained model can further be trained. See lines 100-102.
+
 """
+
 # Default parameters
 tot_episodes = 200000         # Total number of episodes to train model for
 num_saves = 20                # Number of models and animations saved
