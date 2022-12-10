@@ -1,0 +1,11 @@
+pytorch-cuda>=11.6   # Optional, for faster agent training
+python>=3.7
+pytorch>=1.11
+gym=0.21
+stable-baselines3
+numpy
+matplotlib
+scipy
+sympy 
+
+
