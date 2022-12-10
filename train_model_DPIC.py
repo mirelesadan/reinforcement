@@ -2,7 +2,8 @@
 [Main executable .py file.] 
 Upon running:
     (1) Directories for models and logs will be created in specified directory.
-    (2) Reinforcement learning algorithm is loaded*
+    (2) Reinforcement learning algorithm and custom environment are loaded (default 
+        environment is for relaxing the double pendulum)
     (3) Model learning progress is logged in tensorboard (type the follwing
         command on terminal: "tensorboard --logdir .\{LogDirectory}" to see)
     (4) Agent is trained** for user-defined number of episodes (default is 200k) 
@@ -12,7 +13,7 @@ Upon running:
     
 * If different reinforcement learning algorithm is desired, replace all "DDPG"
   entries by deired algorithm (e.g., "PPO" and "A2C").
-** Pre-trained model can further be trained. See lines 100-102.
+** Pre-trained model can further be trained. See lines 101-103.
 
 """
 
@@ -197,7 +198,6 @@ for i in range(num_gifs):
     
 	ani = animation.FuncAnimation(fig, animate, frames=np.arange(0,len(history),int(len(history)/FPS/t_out)), interval=10)
 	ani.save(f"./models/{time_tag}/DDPG_{TIMESTEPS*iters}.gif", writer='pillow', fps=FPS)
-        # ani.save("./models/1669973706/DDPG_180000_{iters}.gif", writer='pillow', fps=FPS)
 	plt.clf()
 
 	print(f"The performance of agent trained after {TIMESTEPS*iters} episodes can now be visualized.")
