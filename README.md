@@ -9,6 +9,10 @@ Repository created by Adan J. Mireles (Fall 2022) for the Data-Enabled Physics C
 
 - Train an agent (via reinforcement learning) to invert or relax a double-pendulum by controlling the horizontal force imposed on the cart. 
 
+## Instructions:
+- Make sure you have fulfilled all requirements in the corresponding .txt file
+- Download files into a single folder
+
 ## CUDA Devices:
 In order to boost agent training...
 - Check if your system has CUDA available (you can verify on https://developer.nvidia.com/cuda-zone)
