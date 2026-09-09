@@ -1,4 +1,4 @@
-# Reinforcement: Inverting and Relaxing a Double-Pendulum In a Cart (DPIC)
+# Reinforcement Learning Control of a Double Pendulum on a Cart
 Repository created by Adan J. Mireles (Fall 2022) for the Data-Enabled Physics Course at Rice University.
 
 - Derive equations of motion for a Double-Pendulum In a Cart (DPIC).
